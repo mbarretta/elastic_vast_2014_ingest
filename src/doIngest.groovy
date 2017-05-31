@@ -5,13 +5,40 @@
 ])
 
 import com.opencsv.CSVReaderBuilder
+import groovy.json.JsonBuilder
 import wslite.http.auth.HTTPBasicAuthorization
 import wslite.rest.ContentType
 import wslite.rest.RESTClient
 
+//LastName,FirstName,CarID,CurrentEmploymentType,CurrentEmploymentTitle
+cars = [:]
+carReader = new CSVReaderBuilder(new FileReader("../car-assignments.csv")).withSkipLines(1).build()
+carReader.readAll().each {
+    cars << [(it[2]): it]
+}
+
+//Timestamp,id,lat,long
+bulkPost = new StringBuilder()
+gpsReader = new CSVReaderBuilder(new FileReader("../gps.csv")).withSkipLines(1).build()
+gpsReader.readAll().each {
+    bulkPost.append(new JsonBuilder([index: [] ]).toString()).append("\n")
+    bulkPost.append(new JsonBuilder([
+        timestamp: it[0],
+        id: it[1],
+        location: [
+            lat: it[2],
+            lon: it[3],
+        ],
+        last_name: cars[it[1]]?.getAt(0) ?: "na",
+        first_name: cars[it[1]]?.getAt(1) ?: "na",
+        employment_type: cars[it[1]]?.getAt(2) ?: "na",
+        employment_title: cars[it[1]]?.getAt(3) ?: "na",
+    ]).toString()).append("\n")
+}
+//println bulkPost.toString()
+
 client = new RESTClient("http://localhost:9200")
 client.authorization = new HTTPBasicAuthorization("elastic", "changeme")
-client.setDefaultAcceptHeader(ContentType.JSON)
 
 client.delete(path: "/vast2014")
 client.put(path: "/vast2014") {
@@ -30,27 +57,10 @@ client.put(path: "/vast2014") {
     ]
 }
 
-//LastName,FirstName,CarID,CurrentEmploymentType,CurrentEmploymentTitle
-cars = [:]
-carReader = new CSVReaderBuilder(new FileReader("../car-assignments.csv")).withSkipLines(1).build()
-carReader.readAll().each {
-    cars << [(it[2]): it]
+new File("../bulk.json").withWriter {
+    it << bulkPost.toString()
 }
 
-//Timestamp,id,lat,long
-gpsReader = new CSVReaderBuilder(new FileReader("../gps.csv")).withSkipLines(1).build()
-gpsReader.readAll().each { record ->
-    client.post(path: "/vast2014/record") {
-        json timestamp: record[0],
-            id: record[1],
-            location: [
-                lat: record[2],
-                lon: record[3],
-            ],
-            last_name: cars[record[1]]?.getAt(0) ?: "na",
-            first_name: cars[record[1]]?.getAt(1) ?: "na",
-            employment_type: cars[record[1]]?.getAt(2) ?: "na",
-            employment_title: cars[record[1]]?.getAt(3) ?: "na"
-    }
-    println "posted record: [$record]"
-}
+//client.post(path: "/vast2014/record/_bulk", headers: ["Content-Type": "application/x-ndjson"]) {
+//    text bulkPost.toString()
+//}
