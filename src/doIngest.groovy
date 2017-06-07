@@ -70,8 +70,3 @@ gpsReader.readAll().each {
     ]).toString()).append("\n")
     count++
 }
-//println bulkPost.toString()
-
-//client.post(path: "/vast2014/record/_bulk", headers: ["Content-Type": "application/x-ndjson"]) {
-//    text bulkPost.toString()
-//}
